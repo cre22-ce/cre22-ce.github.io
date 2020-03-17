@@ -1,0 +1,813 @@
+//Caleb Eastman
+//https://www.w3.org/TR/2003/REC-PNG-20031110/
+use std::io::prelude::*;
+use flate2::Compression;
+use flate2::write::ZlibEncoder;
+
+//the "- 4" is to remove the header name
+//use before adding crc
+macro_rules! add_len {
+    ($vec:expr) => {
+        $vec.extend_into_self_at(0, ($vec.len() as u32 - 4).breakup_into_vec());
+    };
+}
+
+//use after adding len
+macro_rules! add_crc {
+    ($vec:expr) => {
+        $vec.extend(crc_without_len($vec.clone()).breakup_into_vec());
+    };
+}
+
+macro_rules! u8_to_i64 {
+    ($num:expr) => {
+        (($num & 0b0111_1111) as i8) as i64;
+    };
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy)]
+pub enum ColorType{
+    Grayscale, Truecolor, IndexedColor, GrayscaleWithAlpha, TruecolorWithAlpha
+}
+
+impl ColorType{
+    fn to_num(&self) -> u8{
+        //color type (Grayscale 0, Truecolor 2, Indexed-color 3, Grayscale with alpha 4, Truecolor with alpha 6)
+        match *self{
+            ColorType::Grayscale => 0,
+            ColorType::Truecolor => 2,
+            ColorType::IndexedColor => 3,
+            ColorType::GrayscaleWithAlpha => 4,
+            ColorType::TruecolorWithAlpha => 6,
+        }
+    }
+    fn from_num(num: u8) -> ColorType{
+        //color type (Grayscale 0, Truecolor 2, Indexed-color 3, Grayscale with alpha 4, Truecolor with alpha 6)
+        match num{
+            0 => ColorType::Grayscale,
+            2 => ColorType::Truecolor,
+            3 => ColorType::IndexedColor,
+            4 => ColorType::GrayscaleWithAlpha,
+            6 => ColorType::TruecolorWithAlpha,
+            _ => panic!("Not 0,2,3,4,6")
+        }
+    }
+    fn channels(&self) -> u8{
+        match *self{
+            ColorType::Grayscale => 1,
+            ColorType::Truecolor => 3,
+            ColorType::IndexedColor => 1,
+            ColorType::GrayscaleWithAlpha => 2,
+            ColorType::TruecolorWithAlpha => 4,
+        }
+    }
+    fn has_alpha(&self) -> bool{
+        match *self{
+            ColorType::Grayscale => false,
+            ColorType::Truecolor => false,
+            ColorType::IndexedColor => false,
+            ColorType::GrayscaleWithAlpha => true,
+            ColorType::TruecolorWithAlpha => true,
+        }
+    }
+    fn has_rgb(&self) -> bool{
+        match *self{
+            ColorType::Grayscale => false,
+            ColorType::Truecolor => true,
+            ColorType::IndexedColor => false,
+            ColorType::GrayscaleWithAlpha => false,
+            ColorType::TruecolorWithAlpha => true,
+        }
+    }
+    /*fn padded_channels(&self) -> u8{
+        self.channels() + 1
+    }*/
+}
+
+impl std::fmt::Display for ColorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self{
+            ColorType::Grayscale => write!(f, "Grayscale"),
+            ColorType::Truecolor => write!(f, "Truecolor"),
+            ColorType::IndexedColor => write!(f, "Indexed Color"),
+            ColorType::GrayscaleWithAlpha => write!(f, "Grayscale with Alpha"),
+            ColorType::TruecolorWithAlpha => write!(f, "Truecolor with Alpha"),
+        }
+    }
+}
+
+impl std::cmp::PartialEq for ColorType{
+    fn eq(&self, rhs: &ColorType) -> bool{
+        format!("{}", self).eq(&format!("{}", rhs))
+    }
+}
+
+///SubPixel struct represents a subpixel of any bitdepth, from 1 bit to 16 bits.
+///Grayscale allows bitdepths: 1,2,4,8,16 (greyscale sample)
+///Truecolor allows bitdepths: 8,16 (RGB Triple)
+///IndexedColor allows bitdepths: 1,2,4,8 (palette index; must be paired with a PLTE chunk)
+///Grayscale with Alpha allows bitdepths: 8,16 (grayscale followed by alpha value)
+///Truecolor with Alpha allows bitdepths: 8,16 (rgb triple followed by alpha value)
+struct SubPixel{
+    color_type: ColorType,
+    bit_depth: u8,
+    color: u32,
+    alpha: u8,
+}
+#[allow(dead_code)]
+impl SubPixel {
+    fn new(color_type: ColorType, bit_depth: u8) -> SubPixel{
+        assert!(SubPixel::check_bit_depth(&color_type, bit_depth));
+        SubPixel {color_type, bit_depth, color: 0, alpha: 255}
+    }
+
+    fn new_with_values(color_type: ColorType, bit_depth: u8, color: u32, alpha: u8) -> SubPixel{
+        assert!(SubPixel::check_bit_depth(&color_type, bit_depth));
+        SubPixel {color_type, bit_depth, color, alpha}
+    }
+
+    fn check_bit_depth(color_type: &ColorType, bit_depth: u8) -> bool{
+        match color_type{
+            ColorType::Grayscale => (bit_depth == 1 || bit_depth == 2 || bit_depth == 4 || bit_depth == 8 || bit_depth == 16),
+            ColorType::Truecolor => (bit_depth == 8 || bit_depth == 16),
+            ColorType::IndexedColor => (bit_depth == 1 || bit_depth == 2 || bit_depth == 4 || bit_depth == 8),
+            ColorType::GrayscaleWithAlpha => (bit_depth == 8 || bit_depth == 16),
+            ColorType::TruecolorWithAlpha => (bit_depth == 8 || bit_depth == 16),
+        }
+    }
+
+    fn _add_rgb(&mut self, r: u8, g: u8, b: u8){
+        assert!(self.color_type.has_rgb());
+        let r_mask = (r as u32) << (16);
+        let g_mask = (g as u32) << (8);
+        let add = r_mask + g_mask + (b as u32);
+        self.color += add;
+    }
+
+    fn _sub_rgb(&mut self, r: u8, g: u8, b: u8){
+        assert!(self.color_type.has_rgb());
+        let r_mask = (r as u32) << 16;
+        let g_mask = (g as u32) << 8;
+        let sub = r_mask + g_mask + (b as u32);
+        self.color -= sub;
+    }
+
+    fn get_rgb(&self) -> (u8, u8, u8){
+        assert!(self.color_type.has_rgb());
+        let r = ((self.color >> 16) & 0xFF) as u8;
+        let g = ((self.color >> 8) & 0xFF) as u8;
+        let b = (self.color & 0xFF) as u8;
+        (r, g, b)
+    }
+}
+
+impl std::ops::Add for SubPixel {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        assert!(self.color_type == other.color_type);
+        assert!(self.bit_depth == other.bit_depth);
+        Self {
+            color_type: self.color_type,
+            bit_depth: self.bit_depth,
+            color: self.color + other.color,
+            alpha: self.alpha + other.alpha
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub fn drop<T>(_x: T) { }
+
+trait Breakup{
+    fn breakup_into_slice(&self) -> [u8; 4];
+    fn breakup_into_vec(&self) -> Vec<u8>;
+}
+
+impl Breakup for u32{
+    fn breakup_into_slice(&self) -> [u8; 4]{
+        let b1 : u8 = ((self >> 24) & 0xffu32) as u8;
+        let b2 : u8 = ((self >> 16) & 0xffu32) as u8;
+        let b3 : u8 = ((self >> 8) & 0xffu32) as u8;
+        let b4 : u8 = (self & 0xffu32) as u8;
+        return [b1, b2, b3, b4]
+    }
+    fn breakup_into_vec(&self) -> Vec<u8>{
+        vec![((self >> 24) & 0xffu32) as u8, ((self >> 16) & 0xffu32) as u8, ((self >> 8) & 0xffu32) as u8, (self & 0xffu32) as u8]
+    }
+}
+
+impl Breakup for u8{
+    fn breakup_into_slice(&self) -> [u8; 4]{
+        let b1 : u8 = ((self >> 6) & 0b11u8) as u8;
+        let b2 : u8 = ((self >> 4) & 0b11u8) as u8;
+        let b3 : u8 = ((self >> 2) & 0b11u8) as u8;
+        let b4 : u8 = (self & 0b11u8) as u8;
+        return [b1, b2, b3, b4]
+    }
+    fn breakup_into_vec(&self) -> Vec<u8>{
+        vec![((self >> 6) & 0b11u8) as u8, ((self >> 4) & 0b11u8) as u8, ((self >> 2) & 0b11u8) as u8, (self & 0b11u8) as u8]
+    }
+}
+
+trait ExtendInto<T>{
+    fn extend_into_self_at(&mut self, ind: usize, vec: Vec<T>);
+}
+
+impl <T> ExtendInto<T> for Vec<T>{
+    fn extend_into_self_at(&mut self, ind: usize, vec: Vec<T>){
+        let vec2 = self.split_off(ind);
+        self.extend(vec);
+        self.extend(vec2);
+    }
+}
+
+fn convert_name(name: &'static str) -> Vec<u8> {
+    name.chars().map(|c| c as u8).collect::<Vec<u8>>()
+}
+
+#[allow(dead_code)]
+fn gen_crc_table() -> [u32; 256] {
+    let mut table: [u32; 256] = [0u32; 256];
+    let mut c: u32;
+    for n in 0..256 {
+        c = n as u32;
+        for _k in 0..8{
+            if c & 1 == 0 {
+                c = 0xEDB88320 ^ (c >> 1);
+            } else {
+                c = c >> 1;
+            }
+        }
+        table[n] = c;
+    }
+    table
+}
+
+fn crc(data: Vec<u8>) -> u32{
+    //table gened from get_crc_table
+    let crc_table: [u32; 256] = [0x2D02EF8D, 0x5A05DF1B, 0xC30C8EA1, 0xB40BBE37, 0x2A6F2B94, 0x5D681B02, 0xC4614AB8, 0xB3667A2E, 0x23D967BF, 0x54DE5729, 0xCDD70693, 0xBAD03605, 0x24B4A3A6, 0x53B39330, 0xCABAC28A, 0xBDBDF21C, 0x30B5FFE9, 0x47B2CF7F, 0xDEBB9EC5, 0xA9BCAE53, 0x37D83BF0, 0x40DF0B66, 0xD9D65ADC, 0xAED16A4A, 0x3E6E77DB, 0x4969474D, 0xD06016F7, 0xA7672661, 0x3903B3C2, 0x4E048354, 0xD70DD2EE, 0xA00AE278, 0x166CCF45, 0x616BFFD3, 0xF862AE69, 0x8F659EFF, 0x11010B5C, 0x66063BCA, 0xFF0F6A70, 0x88085AE6, 0x18B74777, 0x6FB077E1, 0xF6B9265B, 0x81BE16CD, 0x1FDA836E, 0x68DDB3F8, 0xF1D4E242, 0x86D3D2D4, 0xBDBDF21, 0x7CDCEFB7, 0xE5D5BE0D, 0x92D28E9B, 0xCB61B38, 0x7BB12BAE, 0xE2B87A14, 0x95BF4A82, 0x5005713, 0x72076785, 0xEB0E363F, 0x9C0906A9, 0x26D930A, 0x756AA39C, 0xEC63F226, 0x9B64C2B0, 0x5BDEAE1D, 0x2CD99E8B, 0xB5D0CF31, 0xC2D7FFA7, 0x5CB36A04, 0x2BB45A92, 0xB2BD0B28, 0xC5BA3BBE, 0x5505262F, 0x220216B9, 0xBB0B4703, 0xCC0C7795, 0x5268E236, 0x256FD2A0, 0xBC66831A, 0xCB61B38C, 0x4669BE79, 0x316E8EEF, 0xA867DF55, 0xDF60EFC3, 0x41047A60, 0x36034AF6, 0xAF0A1B4C, 0xD80D2BDA, 0x48B2364B, 0x3FB506DD, 0xA6BC5767, 0xD1BB67F1, 0x4FDFF252, 0x38D8C2C4, 0xA1D1937E, 0xD6D6A3E8, 0x60B08ED5, 0x17B7BE43, 0x8EBEEFF9, 0xF9B9DF6F, 0x67DD4ACC, 0x10DA7A5A, 0x89D32BE0, 0xFED41B76, 0x6E6B06E7, 0x196C3671, 0x806567CB, 0xF762575D, 0x6906C2FE, 0x1E01F268, 0x8708A3D2, 0xF00F9344, 0x7D079EB1, 0xA00AE27, 0x9309FF9D, 0xE40ECF0B, 0x7A6A5AA8, 0xD6D6A3E, 0x94643B84, 0xE3630B12, 0x73DC1683, 0x4DB2615, 0x9DD277AF, 0xEAD54739, 0x74B1D29A, 0x3B6E20C, 0x9ABFB3B6, 0xEDB88320, 0xC0BA6CAD, 0xB7BD5C3B, 0x2EB40D81, 0x59B33D17, 0xC7D7A8B4, 0xB0D09822, 0x29D9C998, 0x5EDEF90E, 0xCE61E49F, 0xB966D409, 0x206F85B3, 0x5768B525, 0xC90C2086, 0xBE0B1010, 0x270241AA, 0x5005713C, 0xDD0D7CC9, 0xAA0A4C5F, 0x33031DE5, 0x44042D73, 0xDA60B8D0, 0xAD678846, 0x346ED9FC, 0x4369E96A, 0xD3D6F4FB, 0xA4D1C46D, 0x3DD895D7, 0x4ADFA541, 0xD4BB30E2, 0xA3BC0074, 0x3AB551CE, 0x4DB26158, 0xFBD44C65, 0x8CD37CF3, 0x15DA2D49, 0x62DD1DDF, 0xFCB9887C, 0x8BBEB8EA, 0x12B7E950, 0x65B0D9C6, 0xF50FC457, 0x8208F4C1, 0x1B01A57B, 0x6C0695ED, 0xF262004E, 0x856530D8, 0x1C6C6162, 0x6B6B51F4, 0xE6635C01, 0x91646C97, 0x86D3D2D, 0x7F6A0DBB, 0xE10E9818, 0x9609A88E, 0xF00F934, 0x7807C9A2, 0xE8B8D433, 0x9FBFE4A5, 0x6B6B51F, 0x71B18589, 0xEFD5102A, 0x98D220BC, 0x1DB7106, 0x76DC4190, 0xB6662D3D, 0xC1611DAB, 0x58684C11, 0x2F6F7C87, 0xB10BE924, 0xC60CD9B2, 0x5F058808, 0x2802B89E, 0xB8BDA50F, 0xCFBA9599, 0x56B3C423, 0x21B4F4B5, 0xBFD06116, 0xC8D75180, 0x51DE003A, 0x26D930AC, 0xABD13D59, 0xDCD60DCF, 0x45DF5C75, 0x32D86CE3, 0xACBCF940, 0xDBBBC9D6, 0x42B2986C, 0x35B5A8FA, 0xA50AB56B, 0xD20D85FD, 0x4B04D447, 0x3C03E4D1, 0xA2677172, 0xD56041E4, 0x4C69105E, 0x3B6E20C8, 0x8D080DF5, 0xFA0F3D63, 0x63066CD9, 0x14015C4F, 0x8A65C9EC, 0xFD62F97A, 0x646BA8C0, 0x136C9856, 0x83D385C7, 0xF4D4B551, 0x6DDDE4EB, 0x1ADAD47D, 0x84BE41DE, 0xF3B97148, 0x6AB020F2, 0x1DB71064, 0x90BF1D91, 0xE7B82D07, 0x7EB17CBD, 0x9B64C2B, 0x97D2D988, 0xE0D5E91E, 0x79DCB8A4, 0xEDB8832, 0x9E6495A3, 0xE963A535, 0x706AF48F, 0x76DC419, 0x990951BA, 0xEE0E612C, 0x77073096, 0x0];
+    let mut crc: u32 = 0xFFFFFFFF;
+    for byte in data{
+        crc = crc_table[((crc ^ byte as u32) & 0xFF) as usize] ^ (crc >> 8);
+    }
+    crc ^ 0xFFFFFFFF
+}
+
+fn crc_without_len(data: Vec<u8>) -> u32 {
+    crc(data.clone().split_off(4))
+}
+
+fn create_chunk(name: &'static str, data: Vec<u8>) -> Vec<u8>{
+    let mut chunk: Vec<u8> = Vec::new();
+    chunk.extend(convert_name(name));
+    chunk.extend(data);
+    add_len!(chunk);
+    add_crc!(chunk);
+    chunk
+}
+
+fn create_compressed_chunk(name: &'static str, data: Vec<u8>) -> Vec<u8>{
+    let mut e = ZlibEncoder::new(Vec::new(), Compression::fast());
+    e.write_all(data.clone().as_slice()).expect("oops");
+    let compressed_bytes = e.finish().expect("oops2");
+    create_chunk(name, compressed_bytes)
+    /*idrk what this is
+    let mut idat_data: Vec<u8> = Vec::new();
+    //zlib compression method/flags code: 1 byte
+    let cmf = (8u8 << 4) | 7u8;
+    idat_data.push(cmf);
+    //Additional flags/check bits: 1 byte
+    let mut check: u8 = 0;
+    while (cmf as u32 * 256 + check as u32) % 31 != 0{
+        check += 1;
+    }
+    idat_data.push(check << 4);
+    //Compressed data blocks: n bytes
+    idat_data.extend(compressed_bytes);
+    //Check value: 4 bytes (Adler-32)
+    let mut a = 1u32;
+    let mut b = 0u32;
+    for d in data.clone() {
+        a += d as u32 % 65521u32;
+        b += a % 65521u32;
+    }
+    let check = (b << 16) | a;
+    idat_data.extend(check.breakup_into_vec());
+    create_idat(idat_data)*/
+}
+
+pub fn create_png_from_data(orig_data: Vec<u8>, ct: ColorType) -> Vec<u8>{
+    let mut data: Vec<u8> = orig_data.clone();
+    while (data.len() as f64 / ct.channels() as f64) % 2f64 != 0f64 {
+        data.push(0);
+    }
+    let mut factors: Vec<u32> = Vec::new();
+    let mut f: u32 = 1;
+    while f <= data.len() as u32 / 2 {
+        let val = (data.len() as f64 / ct.channels() as f64) / f as f64;
+        if  val == val.floor() {
+            factors.push(f);
+            if data.len() as u32 / ct.channels() as u32 / f == f {
+                factors.push(f);
+            }
+        }
+        f += 1;
+    }
+    //println!("{:?}", factors);
+    let mut left: bool = false;
+    while factors.len() > 2 {
+        if left {
+            factors.remove(0);
+        } else {
+            factors.remove(factors.len() - 1);
+        }
+        left = !left;
+    }
+    let width = factors[1];
+    let height = factors[0];
+    let mut real_data: Vec<u8> = Vec::new();
+    let mut i: usize = 0;
+    for _y in 0..(height as usize){
+        //real_data.push(255);
+        for _x in 0..(width as usize*ct.channels() as usize){
+            real_data.push(*data.get(i).expect("big yikes"));
+            i = i.wrapping_add(1);
+        }
+    }
+    create_png_with_settings(real_data, width, height, 8, ct)
+}
+
+//TODO: create a struct called "StreamSource" and allow it to either contain a vec or a file location and when indexes are called it pulls from the correct spot
+#[allow(unused_variables, unused_assignments)]
+pub fn create_png_with_settings(orig_pixel_data: Vec<u8>, width: u32, height: u32, bit_depth: u8, color_type: ColorType) -> Vec<u8>{
+    //some data to change later
+    //bit depth (number of bits per sample or per palette index (not per pixel))
+    //let bit_depth: u8 = 1 * 8; //byte * 8 = bit
+    if !SubPixel::check_bit_depth(&color_type, bit_depth){
+        panic!("Invalid bit depth \"{}\" for Color Type \"{}\"", &bit_depth, color_type);
+    }
+    //color type (Grayscale 0, Truecolor 2, Indexed-color 3, Grayscale with alpha 4, Truecolor with alpha 6)
+    //TODO: cant use indexed colors rn, def implement indexed color for compression
+    //let color_type: u8 = 2;
+    //compression method
+    //0 is zlib and is the standard method
+    let compression_method: u8 = 0;
+    //filter method
+    //only 0 is a standard filter method but you employ 5 different filter types
+    let filter_method: u8 = 0;
+    //interlace method
+    //0 is just pulling the data left to right, top to bottom
+    //1 is Adam7 interlace
+    let interlace_method: u8 = 0;
+    if width == 0 || height == 0 {
+        panic!("Width or height is 0 ({}, {})", width, height);
+    }
+    /*use std::collections::HashMap;
+    let mut color_type_map: HashMap<u8, ColorType> = HashMap::new();
+    color_type_map.insert(0, ColorType::Grayscale);
+    color_type_map.insert(2, ColorType::Truecolor);
+    color_type_map.insert(3, ColorType::IndexedColor);
+    color_type_map.insert(4, ColorType::GrayscaleWithAlpha);
+    color_type_map.insert(6, ColorType::TruecolorWithAlpha);
+    //multiply because of decimals
+    let channel_bytes = color_type_map.get(&color_type.to_num()).expect("nice").channels() as u32 * (bit_depth / 8) as u32;
+    let total_channels_sum = (width * height) * channel_bytes;*/
+    let total_channels_sum = width * height * color_type.channels() as u32;
+    if orig_pixel_data.len() as u32 > total_channels_sum {
+        panic!("Pixel data length is larger than width * height * {} channel count ({} > {} * {} * {} [= {}])", color_type, orig_pixel_data.len(), width, height, color_type.channels(), total_channels_sum);
+    }
+    let mut pixel_data: Vec<u8> = orig_pixel_data.clone();
+    /*let mut i: usize = 0;
+    let mut mult = width as usize * color_type_map.get(&color_type).expect("nice").channels as usize;
+    while i * mult < pixel_data.len() {
+        pixel_data.insert(i, 255);
+        i = 1 + i;
+        mult = width as usize * (color_type_map.get(&color_type).expect("nice").channels as usize).wrapping_sub(i);
+    }*/
+    //add the null bytes to the end to pad
+    while pixel_data.len() < total_channels_sum as usize {
+        pixel_data.push(0u8);
+    }
+
+    //let header: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    let mut file: Vec<u8> = Vec::new();
+    file.extend(vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]); //add header
+    //println!("Added header");
+    //chunk is length (4 bytes; NOT LENGTH OF THE WHOLE CHUNK), chunk type (4 bytes), chunk data (length bytes), and crc (4 bytes)
+    //crc calculated on everything but the length bytes
+    //IHDR
+    let mut ihdr: Vec<u8> = Vec::new();
+    ihdr.extend_from_slice(&width.breakup_into_slice());
+    ihdr.extend_from_slice(&height.breakup_into_slice());
+    ihdr.push(bit_depth);
+    ihdr.push(color_type.to_num());
+    ihdr.push(compression_method);
+    ihdr.push(filter_method);
+    ihdr.push(interlace_method);
+    file.extend(create_chunk("IHDR", ihdr));
+    //println!("Added IHDR");
+    file.extend(create_chunk("sRGB", vec![0]));
+    file.extend(create_chunk("gAMA", 45455u32.breakup_into_vec()));
+    file.extend(create_chunk("PLTE", vec![0;4]));
+    /*PLTE
+    //optional for truecolor
+    let mut plte: Vec<u8> = Vec::new();
+    plte.extend(convert_name("PLTE"));
+    
+    plte.extend_into_self_at(0, (plte.len() as u32 - 4).breakup_into_vec());
+    plte.extend(crc_without_len(plte.clone()).breakup_into_vec());
+    file.extend(plte);*/
+
+    //best filter type applied to each scanline
+    //x is byte of current pixel,
+    //a is the same byte in the pixel to the left,
+    //b is the same byte in the pixel above,
+    //c is the same byte in the top left neighbor pixel
+    //(if pixel doesn't exist use 0)
+    //make sure none of the values are post filtering, all need to be original
+    /*c b
+      a x*/
+    fn filter1_sub(x: u8, a: u8) -> u8{
+        return x.wrapping_sub(a);
+    }
+    fn filter2_up(x: u8, b: u8) -> u8{
+        return x.wrapping_sub(b);
+    }
+    fn filter3_average(x: u8, a: u8, b: u8) -> u8{
+        return x.wrapping_sub(((a.wrapping_add(b)) as f32 / 2f32).floor() as u8);
+    }
+    fn filter4_paeth(x: u8, a: u8, b: u8, c: u8) -> u8{
+        let p: i32 = (a as i32).wrapping_add(b as i32).wrapping_sub(c as i32);
+        let pa = (p.wrapping_sub(a as i32)).abs();
+        let pb = (p.wrapping_sub(b as i32)).abs();
+        let pc = (p.wrapping_sub(c as i32)).abs();
+        let pr: u8;
+        if (pa <= pb) && (pa <= pc){
+            pr = a;
+        }else if pb <= pc{
+            pr = b;
+        }else{
+            pr = c;
+        }
+        x.wrapping_sub(pr)
+    }
+    //TODO: this isn't how idat should work, idats split up the already compressed filtered lines at any point
+    let mut make_idat_at: u32 = 0;
+    for i in 1..height {
+        let temp = i * width as u32;
+        if temp >= <u32>::max_value() {
+            make_idat_at = i - 1;
+            break;
+        }
+    }
+    //println!("make_idat_at calculated to be {}", make_idat_at);
+    let mut filtered_lines: Vec<u8> = Vec::new();
+    let mut last_line: Vec<u8> = Vec::new();
+    for y in 0..height as usize {
+        let mut subp_line: Vec<SubPixel> = Vec::new();
+        let start = y * width as usize * color_type.channels() as usize;
+        //get current line
+        //println!("{} + {} = {}", start, width as usize * color_type.channels() as usize, start + (width as usize * channel_bytes as usize));
+        let mut split_pixel_data: Vec<u8> = Vec::new();
+        for x in start..(start + width as usize * color_type.channels() as usize){
+            match bit_depth {
+                1 => {
+                        let breakup = pixel_data[x].breakup_into_vec();
+                        let mut futher_breakup: Vec<u8> = Vec::new();
+                        for b in breakup {
+                            futher_breakup.push(b & 0b10);
+                            futher_breakup.push(b & 0b01);
+                        }
+                        split_pixel_data.extend_into_self_at(split_pixel_data.len(), futher_breakup);
+                },
+                2 => {
+                    let breakup = pixel_data[x].breakup_into_vec();
+                    split_pixel_data.extend_into_self_at(split_pixel_data.len(), breakup);
+                },
+                4 => {
+                    let breakup = pixel_data[x].breakup_into_vec();
+                    let mut futher_breakup: Vec<u8> = Vec::new();
+                    for i in 0..(breakup.len() / 2) {
+                        futher_breakup.push((breakup[i] << 2) + breakup[i + 1]);
+                    }
+                    split_pixel_data.extend_into_self_at(split_pixel_data.len(), futher_breakup);
+                },
+                8 => {split_pixel_data.push(pixel_data[x]);},
+                16 => {
+                    panic!("add 16 support");
+                },
+                _ => {unreachable!();}
+            };
+        }
+        
+        let mut get_values: Vec<u8> = Vec::new();
+        for i in 0..split_pixel_data.len(){
+            let pixel_counter = i % color_type.channels() as usize;
+            get_values.push(split_pixel_data[i]);
+            if pixel_counter == (color_type.channels() as usize - 1) as usize{
+                //println!("{}: {} and made pixel", pixel_counter, i);
+                if !color_type.has_alpha(){
+                    get_values.push(255);
+                }
+                let mut values_minus_alpha = get_values.clone();
+                let alpha = values_minus_alpha.pop().unwrap();
+                let mut val: u32;
+                if color_type.has_rgb(){
+                    val = (*values_minus_alpha.get(0).unwrap() as u32) << 16 as u32;
+                    val += (*values_minus_alpha.get(1).unwrap() as u32) << 8 as u32;
+                    val += *values_minus_alpha.get(2).unwrap() as u32;
+                }else{
+                    val = *values_minus_alpha.get(0).unwrap() as u32;
+                }
+                subp_line.push(SubPixel::new_with_values(color_type, bit_depth, val, alpha));
+                get_values.clear();
+            }
+            //else{println!("{}: {}", pixel_counter, i);}
+        }
+        //each byte is either 1 whole subpixel (grayscale) or 1 color value (rgba(4 bytes) in truecolor/with alpha or gray+a(2 bytes) in grayscale/with alpha)
+        let mut line: Vec<u8> = Vec::new();
+        for subp in subp_line {
+            if color_type == ColorType::IndexedColor {
+                //TODO: do this
+                panic!("lmao");
+            }
+            if subp.color_type.has_alpha() {
+                if subp.color_type.has_rgb(){
+                    //truecolor with alpha
+                    line.push(subp.get_rgb().0);
+                    line.push(subp.get_rgb().1);
+                    line.push(subp.get_rgb().2);
+                    line.push(subp.alpha);
+                }else{
+                    //grayscale with alpha
+                    line.push(subp.color as u8);
+                    line.push(subp.alpha);
+                }
+            }else{
+                if subp.color_type.has_rgb(){
+                    //truecolor
+                    line.push(subp.get_rgb().0);
+                    line.push(subp.get_rgb().1);
+                    line.push(subp.get_rgb().2);
+                }else{
+                    //grayscale
+                    line.push(subp.color as u8);
+                }
+            }
+        }
+        let _byte_depth = (bit_depth / 8) as usize;
+        //let filter0_none_sum = line.clone().into_iter().fold(0i64, |acc, num| acc + u8_to_i64!(num).abs());
+        let mut filter0_none_sum: i64 = 0;
+        for ind in 0..line.len(){
+            filter0_none_sum += u8_to_i64!(line[ind]).abs();
+        }
+        let mut filter1_sub_vec: Vec<u8> = Vec::new();
+        let mut filter1_sub_sum: i64 = 0;
+        for ind in 0..line.len(){
+            let mut a: u8 = 0;
+            if ind != 0 {a = line[ind - 1];}
+            let num = line[ind];
+            filter1_sub_vec.push(filter1_sub(num, a));
+            filter1_sub_sum += u8_to_i64!(filter1_sub(num, a)).abs();
+        }
+        let mut filter2_up_vec: Vec<u8> = Vec::new();
+        let mut filter2_up_sum: i64 = 0;
+        for ind in 0..line.len(){
+            let mut b: u8 = 0;
+            if !last_line.is_empty() {b = last_line[ind];}
+            let num = line[ind];
+            filter2_up_vec.push(filter2_up(num, b));
+            filter2_up_sum += u8_to_i64!(filter2_up(num, b)).abs();
+        }
+        let mut filter3_average_vec: Vec<u8> = Vec::new();
+        let mut filter3_average_sum: i64 = 0;
+        for ind in 0..line.len(){
+            let mut a: u8 = 0;
+            if ind != 0 {a = line[ind - 1];}
+            let mut b: u8 = 0;
+            if !last_line.is_empty() {b = last_line[ind];}
+            let num = line[ind];
+            filter3_average_vec.push(filter3_average(num, a, b));
+            filter3_average_sum += u8_to_i64!(filter3_average(num, a, b)).abs();
+        }
+        let mut filter4_paeth_vec: Vec<u8> = Vec::new();
+        let mut filter4_paeth_sum: i64 = 0;
+        for ind in 0..line.len(){
+            let mut a: u8 = 0;
+            if ind != 0 {a = line[ind - 1];}
+            let mut b: u8 = 0;
+            if !last_line.is_empty() {b = last_line[ind];}
+            let mut c: u8 = 0;
+            if ind != 0 && !last_line.is_empty() {c = last_line[ind - 1];}
+            let num = line[ind];
+            filter4_paeth_vec.push(filter4_paeth(num, a, b, c));
+            filter4_paeth_sum += u8_to_i64!(filter4_paeth(num, a, b, c)).abs();
+        }
+        #[allow(unused_variables)]
+        let lens = vec![filter0_none_sum, filter1_sub_sum, filter2_up_sum, filter3_average_sum, filter4_paeth_sum];
+        let min = *lens.iter().min().unwrap();
+        //let min = filter0_none_sum;
+        if min == filter0_none_sum{
+            //println!("0");
+            filtered_lines.push(0);
+            filtered_lines.extend(line.clone());
+        }else if min == filter1_sub_sum{
+            //println!("1");
+            filtered_lines.push(1);
+            filtered_lines.extend(filter1_sub_vec);
+        }else if min == filter2_up_sum{
+            //println!("2");
+            filtered_lines.push(2);
+            filtered_lines.extend(filter2_up_vec);
+        }else if min == filter3_average_sum{
+            //println!("3");
+            filtered_lines.push(3);
+            filtered_lines.extend(filter3_average_vec);
+        }else {
+            //println!("4");
+            filtered_lines.push(4);
+            filtered_lines.extend(filter4_paeth_vec);
+        }
+
+        if make_idat_at != 0{
+            if y as u32 % make_idat_at == 0 {
+                //println!("Created an IDAT");
+                file.extend(create_compressed_chunk("IDAT", filtered_lines.clone()));
+                filtered_lines.clear();
+            }
+        }
+
+        last_line = line.clone();
+    }
+    //println!("Finished IDATs");
+
+    if !filtered_lines.is_empty() {
+        //println!("Flushed filtered_lines into stream");
+        file.extend(create_compressed_chunk("IDAT", filtered_lines));
+    }
+
+    //IEND
+    file.extend(create_chunk("IEND", Vec::new()));
+    //println!("Added IEND");
+    file
+}
+
+#[cfg(test)]
+mod tests {
+    fn get_vec() -> Vec<u8>{
+        let size: u32 = 150;
+        let mut out_vec: Vec<u8> = Vec::new();
+        //divide by 4 if vec
+        /*for i in 0..(size*(size*3)){
+            out_vec.push(i as u8);
+        }*/
+        let mut i: u8 = 0;
+        for _y in 0..(size as usize){
+            for _x in 0..(size as usize*3){
+                out_vec.push(i as u8);
+                i = i.wrapping_add(1);
+            }
+        }
+        /*for _y in 0..(size as usize){
+            for _x in 0..(size as usize/2){
+                out_vec.push((_x as u8).rotate_right(4) | _y as u8);
+            }
+        }*/
+        out_vec
+    }
+    #[test]
+    fn write_file() {
+        use std::io::Write;
+        let file_vec: Vec<u8> = get_vec();
+        /*file_vec.remove(0);
+        file_vec.insert(0, 255);
+        file_vec.remove(file_vec.len() - 1);
+        file_vec.push(255);*/
+        use std::fs::File;
+        let png = super::create_png_from_data(file_vec, super::ColorType::Truecolor);
+        let mut file = File::create("img.png").expect("file error");
+        file.write_all(png.as_slice().clone()).expect("oopsy");
+        //println!("{:?}", create_png(vec![5, 6 ,7, 8], 2, 2));
+        //println!("[{}]", 0x12345678u32.breakup_into_slice().into_iter().fold(String::new(), |acc, num| format!("{} 0x{:02X}, ", acc, &num)));
+        //println!("[{}]", gen_crc_table().into_iter().fold(String::new(), |acc, num| format!("{} 0x{:X}, ", acc, &num)));
+        //println!("{:x}", crc(vec![1,2,34,1,41,4,15,51,51,51]));
+    }
+    
+    #[test]
+    fn verify_values() {
+        let input_values = get_vec();
+        let png = super::create_png_from_data(input_values.clone(), super::ColorType::Truecolor);
+        //chunk is length (4 bytes; NOT LENGTH OF THE WHOLE CHUNK), chunk type (4 bytes), chunk data (length bytes), and crc (4 bytes)
+        assert_eq!(vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], png.as_slice()[0..8].to_vec());
+        let mut width: Option<usize> = None;
+        let mut height: Option<usize> = None;
+        let mut color_type: Option<super::ColorType> = None;
+        let mut i: usize = 8;
+        while i < png.len() {
+            assert!(i + 4 <= png.len());
+            //length
+            let length_vec = png.as_slice()[i..(i+4)].to_vec().clone();
+            let length = ((length_vec[0] as u32) << 24u32) + ((length_vec[1] as u32) << 16u32) + ((length_vec[2] as u32) << 8u32) + (length_vec[3] as u32);
+            i += 4;
+
+            //type
+            let chunk_type = png.as_slice()[i..(i+4)].to_vec().clone();
+            for x in chunk_type.clone() {
+                x as char;
+            }
+            i += 4;
+
+            //data
+            let chunk_data = png.as_slice()[i..(i+(length as usize))].to_vec().clone();
+            i += length as usize;
+            if chunk_type == super::convert_name("IHDR") {
+                let width_vec = chunk_data.clone()[0..4].to_vec();
+                let height_vec = chunk_data.clone()[4..8].to_vec();
+                width = Some(((width_vec[0] as usize) << 24usize) + ((width_vec[1] as usize) << 16usize) + ((width_vec[2] as usize) << 8usize) + (width_vec[3] as usize));
+                height = Some(((height_vec[0] as usize) << 24usize) + ((height_vec[1] as usize) << 16usize) + ((height_vec[2] as usize) << 8usize) + (height_vec[3] as usize));
+                let bit_depth = chunk_data.clone()[8];
+                let color_type_u8 = chunk_data.clone()[9];
+                color_type = Some(super::ColorType::from_num(color_type_u8));
+                assert!(super::SubPixel::check_bit_depth(&color_type.unwrap(), bit_depth));
+            }
+            if chunk_type == super::convert_name("IDAT") {
+                use flate2::read::ZlibDecoder;
+                use std::io::Read;
+                let mut d = ZlibDecoder::new(&chunk_data[..]);
+                let mut read = Vec::new();
+                d.read_to_end(&mut read).unwrap();
+                let mut lines: Vec<Vec<u8>> = Vec::new();
+                for y in 0..(height.unwrap() as usize){
+                    //println!("y{}", y);
+                    let mut this_line: Vec<u8> = Vec::new();
+                    let start = y * (width.unwrap() * color_type.unwrap().channels() as usize + 1);
+                    let filter_type = read[start];
+                    //println!("f{}", filter_type);
+                    let range = (start+1)..(start + width.unwrap() * color_type.unwrap().channels() as usize + 1);
+                    //println!("{:?}", range);
+                    for xu in range {
+                        let x = read[xu];
+                        match filter_type {
+                            0 => {
+                                this_line.push(x);
+                            },
+                            1 => {
+                                //x = x - a
+                                //reversed: a + x
+                                let mut val = x;
+                                if xu != start+1 {
+                                    val = val.wrapping_add(this_line.last().unwrap().clone());
+                                }
+                                this_line.push(val);
+                            },
+                            2 => {
+                                //x = x - b
+                                //reversed: b + x
+                                let mut val = x;
+                                if y != 0 {
+                                    val = val.wrapping_add(lines.get(y-1).unwrap().get(xu).unwrap().clone());
+                                }
+                                this_line.push(val);
+                            },
+                            3 => {
+                                //x = x - floor((a + b) / 2)
+                                //reversed: x + floor((a + b) / 2)
+                                let mut val = x;
+                                let mut a = 0;
+                                let mut b = 0;
+                                if xu != start+1{
+                                    a = this_line.last().unwrap().clone();
+                                }
+                                if y != 0 {
+                                    b = lines.get(y-1).unwrap().get(xu).unwrap().clone();
+                                }
+                                val = val + ((a+b) as f32/2f32).floor() as u8;
+                                this_line.push(val);
+                            },
+                            4 => {
+                                //Exactly the same PaethPredictor function is used by both encoder and decoder.
+                                unimplemented!();
+                            }
+                            _ => {unreachable!()}
+                        };
+                    }
+                    lines.push(this_line);
+                }
+                let mut all_vals: Vec<u8> = Vec::new();
+                for v in lines {
+                    for p in v {
+                        all_vals.push(p);
+                    }
+                }
+                assert_eq!(input_values, all_vals);
+            }
+            //crc
+            let crc_vec = png.as_slice()[i..(i+4)].to_vec().clone();
+            let crc = ((crc_vec[0] as u32) << 24u32) + ((crc_vec[1] as u32) << 16u32) + ((crc_vec[2] as u32) << 8u32) + (crc_vec[3] as u32);
+            assert_eq!(crc, super::crc(png.as_slice()[(i-(length as usize)-4)..i].to_vec().clone()));
+            i += 4;
+        }
+    }
+}

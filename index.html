@@ -1,18 +1,27 @@
 <!DOCTYPE html>
 <html>
-    <script>
-
-    </script>
+    <script src="./replaceText.js"></script>
+    <script src="./replace.js"></script>
     <head>
-        <style>
-            html {
-                font-family: Helvetica;
-            }
-        </style>
+		<title>Writing in the Curriculum Project - Caleb Eastman</title>
+		<link rel="stylesheet" href="./style.css">
     </head>
 
-    <body>
-        <h1>Writing in the Curriculum Project</h1>
-        <p>literally nothing</p>
+    <body onload="bodyOnLoad()">
+			<h1 id="title">Writing in the Curriculum Project</h1>
+			<div id="left">
+				<ul>
+					<li><a onclick="changePage(&quot;main&quot;)" href="javascript:void(0);">Main Page</a></li>
+					<li><a onclick="changePage(&quot;artifacts&quot;)" href="javascript:void(0);">Artifacts and<br />Reflection</a></li>
+					<!--<li><a onclick="changePage(&quot;reflection&quot;)" href="javascript:void(0);">Reflection</a></li>-->
+					<!--<li><a onclick="changePage(&quot;research&quot;)" href="javascript:void(0);">Research</a></li>-->
+					<li><a onclick="changePage(&quot;bib&quot;)" href="javascript:void(0);">Bibliography</a></li>
+					<!--<br />
+					<li><a onclick="changePage(&quot;alltext&quot;)" href="javascript:void(0);">All Text</a></li>-->
+				</ul>
+			</div>
+		<div id="maindiv", class="replacable">
+			
+		</div>
     </body>
 </html>
