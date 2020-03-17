@@ -1,0 +1,59 @@
+<link rel="stylesheet" href="./style.css"><script src="./replace.js"></script>
+<h1>Bibliography:</h1>
+<ul style="padding-left: 0; margin-left: 0">
+	<p>Terminology:</p>
+	<li style="text-indent: 2em;"><b>git</b>: a distributed version control program that allows multiple collaborators to work on one codebase</li>
+	<li style="text-indent: 2em;"><b>Github.com</b>: a website that utilizes the git protocol to maintain user repositories</li>
+	<li style="text-indent: 2em;"><b>repository/repo</b>: a collection of files that represent an entire codebase</li>
+	<li style="text-indent: 2em;"><b>branch</b>: different versions of the same codebase</li>
+	<li style="text-indent: 2em;"><b><code>master</code> branch</b>: the default and main branch in a repository</li>
+	<li style="text-indent: 2em;"><b>merge</b>: to combine two or more branches into one branch</li>
+	<li style="text-indent: 2em;"><b>push</b>: to merge individual files from one branch to another</li>
+	<li style="text-indent: 2em;"><b>pull request</b>: create, modify, and request a merge of a new branch to the <code>master</code> branch ("pulling" the new branch into <code>master</code>)</li>
+	<li style="text-indent: 2em;"><b>commit</b>: description attatched to a push; sometimes interchangable with push</li>
+	<li style="text-indent: 2em;"><b>clone</b>: to download a repository</li>
+	<li style="text-indent: 2em;"><b>fetch</b>: to download a file from a separate repository</li>
+	<li style="text-indent: 2em;"><b>release</b>: a public distribution of the repository</li>
+	<li style="text-indent: 2em;"><b>stable</b> release: a stable, debugged, immutable distribution of the repository</li>
+	<li style="text-indent: 2em;"><b>nightly</b> release: an experimental, sometimes buggy, mutable distribution of the repository</li>
+	<!--<li style="text-indent: 2em;"><b>fork</b>: to create a new repository out of another/li>-->
+	
+</ul>
+<hr />
+<li style="display: block; padding-left: 1em;"><p style="font-size: 150%; display: inline;">Git Pull Request</p> (<a href="https://github.com/rust-lang/rfcs/pull/2729">Link</a> to Github page)</li>
+<div style="text-indent: 2em;">
+<div style="display: inline-block; border-left: solid; border-left-width: 0.5em; border-color: springgreen; border-radius: 5px">
+<p>Title: <code>General floating point formatting in Debug with {:g?}</code> (pull request <code>#2729</code>)</p>
+<p>Requester: <code style="padding-left: 2px; padding-right: 2px;"><a href="https://github.com/ExpHP">ExpHP</a></code></p>
+<p style="display: inline-block; vertical-align: top; margin-top: 0;">Commit message: <pre style="border: solid; border-color: #F8F8F8; background: white; display: inline-block; margin-left: 1em; margin-top: 0; padding-left: 0; padding-top: 1em; padding-right: 1em;">
+Proposes extending <code>{:?}</code> with a general number floating point flag <code>g</code>, similar to <code>{:x?}</code>:
+<pre style="background: #F5F5F5; display: inline-block; margin-left: 1em; padding: 1em; padding-left: 0; border-radius: 5px;">
+assert_eq!(
+	format!("{:g?}", vec![1e2, 1e4, 1e6, 1e8]),
+	"[100.0, 10000.0, 1e6, 1e8]",
+    );</pre></pre></p>
+<p>Files changed: <code style="padding-left: 2px; padding-right: 2px;">1</code></p>
+<p>Lines added/removed: <code style="color: green;">+333</code> <code style="color: red;">-0</code></p>
+<p>Comments on commit: <code style="padding-left: 2px; padding-right: 2px;">7</code></p>
+<p>Status: <code style="background: springgreen">Open</code></p>
+</div>
+<p>This is an example of peer reviewed writing in the engineering field as the revision ExpHP suggested has to be reviewed before it is pushed to <code>master</code>. The comments on the commit are talking about the pros and cons of merging this request while also referencing previously pulled requests where a similar suggestion was made</p>
+</div>
+
+<li style="display: block; padding-left: 1em;"><p style="font-size: 150%; display: inline;">Git Pull Request</p> (<a href="https://github.com/rust-lang/rust/pull/69624">Link</a> to Github page)</li>
+<div style="text-indent: 2em;">
+<div style="display: inline-block; border-left: solid; border-left-width: 0.5em; border-color: purple; border-radius: 5px">
+<p>Title: <code>Toolstate: Don't block beta week on already broken tools.</code> (pull request <code>#69624</code>)</p>
+<p>Requester: <code style="padding-left: 2px; padding-right: 2px;"><a href="https://github.com/ehuss">ehuss</a></code></p>
+<p style="display: inline-block; vertical-align: top; margin-top: 0;">Commit message: <pre style="border: solid; border-color: #F8F8F8; background: white; display: inline-block; margin-left: 1em; margin-top: 0; padding-left: 0; padding-top: 1em; padding-right: 1em;">
+<p style="text-indent: 0; margin: 0; margin-left: 2em;">This changes it so that tools are allowed to be broken entering the beta week if they are already broken.<br />This restores the original behavior before the changes in <a href="https://github.com/rust-lang/rust/pull/66681">#66681</a>.
+
+Closes <a href="https://github.com/rust-lang/rust/issues/68458">#68458</a></p>
+</pre></p>
+<p>Files changed: <code style="padding-left: 2px; padding-right: 2px;">1</code></p>
+<p>Lines added/removed: <code style="color: green;">+133</code> <code style="color: red;">-63</code></p>
+<p>Comments on commit: <code style="padding-left: 2px; padding-right: 2px;">9</code></p>
+<p>Status: <code style="background: purple; color: white">Merged</code></p>
+</div>
+<p>This is an example of peer reviewing others' work as this pull request actually reverts changes made previously in the <code>master</code> branch and closes a pending branch.</p>
+</div>

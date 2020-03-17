@@ -1,0 +1,644 @@
+//Caleb Eastman
+//! `HTTP_Utils` library for building HTTP requests and responses and other various HTTP related tools.
+//! # Note
+//! The words "double carriage return new line" is used throughout this doc. This refers to the character sequence `\r\n\r\n`.
+
+extern crate regex;
+#[macro_use]
+extern crate lazy_static;
+
+use std::*;
+use std::collections::HashMap;
+use regex::Regex;
+
+//the "r" means raw where the escapes aren't evaluated (can use \ instead of \\)
+//Alt+Z in VSCode to toggle line wrap
+lazy_static! {
+    static ref VALID_URI_PATTERN: Regex = {
+        Regex::new(r"^(?:(http(s)?://)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b)?([-a-zA-Z0-9@:%_\+.~#?&//=]*)$").unwrap()
+    };
+
+    static ref HTTP_TYPE_PATTERN: Regex = {
+        Regex::new(r"^HTTP/\d+(\.\d+)?$").unwrap()
+    };
+
+    static ref HTTP_METHOD_PATTERN: Regex = {
+        Regex::new(r"^(?:GET|HEAD|POST|PUT|DELETE|CONNECT|OPTIONS|TRACE|PATCH)$").unwrap()
+    };
+
+    static ref Status: HashMap<i64, &'static str> = {
+        let mut m = HashMap::new();
+        m.insert(100, "CONTINUE");
+        m.insert(101, "SWITCHINGPROTOCOLS");
+        m.insert(200, "OK");
+        m.insert(201, "CREATED");
+        m.insert(202, "ACCEPTED");
+        m.insert(203, "NONAUTHORITATIVEINFORMATION");
+        m.insert(204, "NOCONTENT");
+        m.insert(205, "RESETCONTENT");
+        m.insert(206, "PARTIALCONTENT");
+        m.insert(300, "MULTIPLECHOICES");
+        m.insert(301, "MOVEDPERMANENTLY");
+        m.insert(302, "FOUND");
+        m.insert(303, "SEEOTHER");
+        m.insert(304, "NOTMODIFIED");
+        m.insert(307, "TEMPORARYREDIRECT");
+        m.insert(308, "PERMANENTREDIRECT");
+        m.insert(400, "BADREQUEST");
+        m.insert(401, "UNAUTHORIZED");
+        m.insert(403, "FORBIDDEN");
+        m.insert(404, "NOTFOUND");
+        m.insert(405, "METHODNOTALLOWED");
+        m.insert(406, "NOTACCEPTABLE");
+        m.insert(407, "PROXYAUTHENTICATIONREQUIRED");
+        m.insert(408, "REQUESTTIMEOUT");
+        m.insert(409, "CONFLICT");
+        m.insert(410, "GONE");
+        m.insert(411, "LENGTHREQUIRED");
+        m.insert(412, "PRECONDITIONFAILED");
+        m.insert(413, "PAYLOADTOOLARGE");
+        m.insert(414, "URITOOLONG");
+        m.insert(415, "UNSUPPORTEDMEDIATYPE");
+        m.insert(416, "RANGENOTSATISFIABLE");
+        m.insert(417, "EXPECTATIONFAILED");
+        m.insert(418, "IMATEAPOT");
+        m.insert(426, "UPGRADEREQUIRED");
+        m.insert(428, "PRECONDITIONREQUIRED");
+        m.insert(429, "TOOMANYREQUESTS");
+        m.insert(431, "REQUESTHEADERFIELDSTOOLARGE");
+        m.insert(451, "UNAVAILABLEFORLEGALREASONS");
+        m.insert(500, "INTERNALSERVERERROR");
+        m.insert(501, "NOTIMPLEMENTED");
+        m.insert(502, "BADGATEWAY");
+        m.insert(503, "SERVICEUNAVAILABLE");
+        m.insert(504, "GATEWAYTIMEOUT");
+        m.insert(505, "HTTPVERSIONNOTSUPPORTED");
+        m.insert(511, "NETWORKAUTHENTICATIONREQUIRED");
+        m
+    };
+}
+
+#[derive(Clone)]
+/// `MalformedHTTPRequestException` is used by `HTTPRequest` to return an error.
+pub struct MalformedHTTPRequestException{
+    message: String
+}
+
+impl MalformedHTTPRequestException {
+    fn new(message: String) -> MalformedHTTPRequestException{
+        MalformedHTTPRequestException {message}
+    }
+}
+
+impl fmt::Display for MalformedHTTPRequestException{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "MalformedHTTPRequestException: {}", self.message)
+    }
+}
+
+impl fmt::Debug for MalformedHTTPRequestException{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "MalformedHTTPRequestException: {}", self.message)
+    }
+}
+
+impl error::Error for MalformedHTTPRequestException {
+    fn description(&self) -> &str {
+        &self.message
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        // Generic error, underlying cause isn't tracked.
+        None
+    }
+}
+
+#[derive(Clone)]
+/// `MalformedHTTPResponseException` is used by `HTTPResponse` to return an error.
+pub struct MalformedHTTPResponseException{
+    message: String
+}
+
+impl MalformedHTTPResponseException {
+    #[allow(dead_code)]
+    fn new(message: String) -> MalformedHTTPResponseException{
+        MalformedHTTPResponseException {message}
+    }
+}
+
+impl fmt::Display for MalformedHTTPResponseException{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "MalformedHTTPResponseException: {}", self.message)
+    }
+}
+
+impl fmt::Debug for MalformedHTTPResponseException{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "MalformedHTTPResponseException: {}", self.message)
+    }
+}
+
+impl error::Error for MalformedHTTPResponseException {
+    fn description(&self) -> &str {
+        &self.message
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        // Generic error, underlying cause isn't tracked.
+        None
+    }
+}
+
+/// `ToHTTPMethod` is a trait used to generalize objects that can be converted into an `HTTPMethod`.
+pub trait ToHTTPMethod{
+    /// Converts implimented struct into an `HTTPMethod`.
+    fn to_httpmethod(&self) -> Result<HTTPMethod, ()>;
+}
+
+impl ToHTTPMethod for String{
+    fn to_httpmethod(&self) -> Result<HTTPMethod, ()>{
+        self.parse::<HTTPMethod>()
+    }
+}
+
+impl ToHTTPMethod for HTTPMethod{
+    fn to_httpmethod(&self) -> Result<HTTPMethod, ()>{
+        Ok(self.clone())
+    }
+}
+
+///`HTTPMethod` is an enum containing all HTTP request methods.
+#[derive(PartialEq, Debug, Clone)]
+pub enum HTTPMethod {
+    GET,
+    HEAD,
+    POST,
+    PUT,
+    DELETE,
+    CONNECT,
+    OPTIONS,
+    TRACE,
+    PATCH
+}
+
+impl HTTPMethod {
+    pub fn to_string(&self) -> String{
+        format!("{:?}", self)
+    }
+}
+
+impl fmt::Display for HTTPMethod {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::str::FromStr for HTTPMethod {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<HTTPMethod, ()> {
+        match s {
+            "GET" => Ok(HTTPMethod::GET),
+            "HEAD" => Ok(HTTPMethod::HEAD),
+            "POST" => Ok(HTTPMethod::POST),
+            "PUT" => Ok(HTTPMethod::PUT),
+            "DELETE" => Ok(HTTPMethod::DELETE),
+            "CONNECT" => Ok(HTTPMethod::CONNECT),
+            "OPTIONS" => Ok(HTTPMethod::OPTIONS),
+            "TRACE" => Ok(HTTPMethod::TRACE),
+            "PATCH" => Ok(HTTPMethod::PATCH),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug)]
+/// `HTTPRequest` is a struct containing an HTTP request.
+pub struct HTTPRequest {
+    ///The original data passed into `from_bytes` to construct this.
+    pub raw: Vec<u8>,
+    ///The HTTP method (`GET`,`POST`,`PATCH`, etc...).
+	pub method: HTTPMethod,
+    ///The path requested. Confirmed to be valid url syntax.
+	pub path: String,
+    ///The HTTP type (usually `HTTP/1.1`).
+	pub http_type: String,
+    ///Headers included in the request (e.g., `Host`).
+    pub headers: HashMap<String, String>,
+    ///Data found after a double carraige return new line from the request. Could be empty.
+	pub data: Vec<u8>,
+}
+
+impl Clone for HTTPRequest {
+    fn clone(&self) -> HTTPRequest { HTTPRequest {raw: self.raw.clone(), method: self.method.clone(), path: self.path.to_string(), http_type: self.http_type.to_string(), headers: self.headers.clone(), data: self.data.clone()} }
+}
+
+impl HTTPRequest {
+    #![allow(dead_code)]
+    ///Takes in a slice of bytes and returns a `Result` containing either the filled `HTTPRequest` or a `MalformedHTTPRequestException` error.
+    /// 
+    /// # Errors
+    /// This will return a `MalformedHTTPRequestException` if:
+    /// * the request does not contain a double carriage return new line (`\r\n\r\n`) to separate the status line and headers from the data.
+    /// While the request may not contain headers or data, this empty line must be present.
+    /// Add `\r\n\r\n` to the end of your request if an error is returned and the request does not contain data.
+    /// * the HTTP method is not valid. Must match the regex `^(?:GET|HEAD|POST|PUT|DELETE|CONNECT|OPTIONS|TRACE|PATCH)$`.
+    /// * the HTTP type does not match the regex `^HTTP/\d+(\.\d+)?$`.
+    /// * the path requested is not a valid URI or URI path.
+    pub fn from_bytes(req_slice: &[u8]) -> Result<HTTPRequest, MalformedHTTPRequestException> {
+        let req = req_slice.to_vec();
+        let raw = req.clone();
+        let mut cont: String = String::new();
+        let mut off: i64 = -1;
+        let mut done: bool = false;
+        while !done {
+            for i in 0..req.len() {
+                let get: &[u8] = req.split_at(i).0;
+                cont = str::from_utf8(get).unwrap().to_string();
+				if cont.ends_with("\r\n\r\n") {
+					off = i as i64;
+					done = true;
+					break;
+				}
+            }
+			if !done {
+                cont = str::from_utf8(&req).unwrap().to_string();
+				if cont.ends_with("\r\n\r\n") {
+					off = req.len() as i64;
+					//done = true;
+					break;
+				}else {
+					return Err(MalformedHTTPRequestException::new("Request does not have \\r\\n\\r\\n before data".to_string()));
+				}
+			}
+        }
+
+        let request_line: String = cont.splitn(2, "\r\n").collect::<Vec<&str>>()[0].to_string();
+        let method_test: String = request_line.splitn(3, " ").collect::<Vec<&str>>()[0].to_string();
+        let path_test: String = request_line.splitn(3, " ").collect::<Vec<&str>>()[1].to_string();
+        let http_type_test: String = request_line.splitn(3, " ").collect::<Vec<&str>>()[2].to_string();
+
+        if !HTTP_METHOD_PATTERN.is_match(&method_test) {
+			return Err(MalformedHTTPRequestException::new(format!("Method \"{}\" does not match \"{}\"", method_test, HTTP_METHOD_PATTERN.as_str())));
+        }
+        if !VALID_URI_PATTERN.is_match(&path_test.to_lowercase()) {
+			return Err(MalformedHTTPRequestException::new(format!("Path \"{}\" is not a valid URI or URI path", path_test)));
+        }
+        if !HTTP_TYPE_PATTERN.is_match(&http_type_test) {
+			return Err(MalformedHTTPRequestException::new(format!("HTTP Type \"{}\" does not match \"{}\"", http_type_test, HTTP_TYPE_PATTERN.as_str())));
+        }
+
+        let headers = string_to_hash_map(cont.splitn(2, "\r\n").collect::<Vec<&str>>()[1].to_string());
+
+        let mut data: Vec<u8> = Vec::new();
+
+        for i in off as usize..req.len(){
+            data.push(req[i]);
+        }
+        return Ok(HTTPRequest {raw: raw, method: method_test.parse().unwrap(), path: path_test, http_type: http_type_test, headers: headers, data: data});
+    }
+
+    /// Forms an `HTTPRequest` from data provided.
+    ///
+    /// # Errors
+    /// Should not panic, but calls `HTTPRequest::from_bytes` so an error may be returned if any of the arguments are malformed.
+    /// 
+    /// # Arguments
+    /// `method`: HTTP request method (e.g.: `GET`, `POST`, `PATCH`, etc...).
+    /// 
+    /// `path`: Request path or URI (e.g.: `/`, `/favicon.ico`, `/sitemap`).
+    /// 
+    /// `http_type`: The HTTP type, usually `HTTP/1.1`.
+    /// 
+    /// `headers`: `HashMap` containing headers. The keys and values are both `String`s.
+    /// Use `http_utils::string_to_hash_map(String)` to turn a colon-separated list into a compatible `HashMap`. May be empty.
+    /// 
+    /// `data`: `Vec` of bytes to append to the end of a request. Can be empty.
+    pub fn create_request<MET: ToHTTPMethod>(method: MET, path: String, http_type: String, headers: HashMap<String, String>, data: Vec<u8>) -> Result<HTTPRequest, MalformedHTTPRequestException>{
+        let mut ret = format!("{} {} {}\r\n", method.to_httpmethod().unwrap(), path, http_type);
+        for (key, val) in headers.clone() {
+            //NOT += because ret is formatted to the beginning
+            ret = format!("{}{}: {}\r\n", ret, key, val);
+        }
+        ret += "\r\n";
+        let mut vec: Vec<u8> = ret.as_bytes().to_vec();
+        vec.extend(data);
+        HTTPRequest::from_bytes(&vec)
+    }
+
+    ///Converts this `HTTPRequest` into a string. The returned string ends with the `HTTPRequest`s `data` field.
+    ///# Panics
+    ///Will panic if `data` is not in UTF-8 format. If so, use `to_string_no_data()` instead and handle the `data` field separately.
+    pub fn to_string(&self) -> String{
+        let mut ret = self.to_string_no_data();
+        ret += str::from_utf8(&self.data.clone()).unwrap();
+        ret
+    }
+
+    ///Converts this `HTTPRequest` into a string without the `data` field. Designed for use when `data` is not UTF-8 compatible.
+    ///Resembles an `HTTPRequest` without data (still ends in a double carriage return new line)
+    pub fn to_string_no_data(&self) -> String{
+        let mut ret = format!("{} {} {}\r\n", self.method, self.path, self.http_type);
+        for (key, val) in self.headers.clone() {
+            ret = format!("{}{}: {}\r\n", ret, key, val);
+        }
+        ret += "\r\n";
+        ret
+    }
+
+    ///Converts this `HTTPRequest` into a `Vec<u8>`.
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.to_string().as_bytes().to_vec()
+    }
+
+    ///Converts this `HTTPRequest` into a `Vec<u8>` without converting to a string first.
+    ///This eliminates potential errors with the `data` field not being in UTF-8 format
+    pub fn as_bytes(&self) -> Vec<u8>{
+        let mut ret = self.to_string_no_data().as_bytes().to_vec();
+        ret.extend(&self.data.clone());
+        ret
+    }
+}
+
+#[derive(Debug)]
+/// `HTTPResponse` is a struct containing an HTTP response.
+pub struct HTTPResponse {
+    ///The original data passed into `from_bytes` to construct this.
+    pub raw: Vec<u8>,
+    ///The HTTP type (usually `HTTP/1.1`).
+	pub http_type: String,
+    ///Status tuple containing the status code given and the ***assumed*** reason. While the string *should* match the reason given by the response, it ***could*** be "UNKNOWN" which means the number is not a known value.
+	pub status: (i64, String),
+    ///Reason given by the response.
+	pub reason: String,
+    ///Headers included in the response (e.g., `Host`).
+    pub headers: HashMap<String, String>,
+    ///Data found after a double carraige return new line from the response. Could be empty.
+	pub data: Vec<u8>,
+
+}
+
+impl Clone for HTTPResponse {
+    fn clone(&self) -> HTTPResponse { HTTPResponse {raw: self.raw.clone(), http_type: self.http_type.to_string(), status: self.status.clone(), reason: self.reason.to_string(), headers: self.headers.clone(), data: self.data.clone()} }
+}
+
+impl HTTPResponse {
+    #![allow(dead_code)]
+    /// Takes in a slice of bytes and returns a `Result` containing either the filled
+    /// `HTTP_Resonse` or a `MalformedHTTPResponseException` error.
+    /// 
+    /// # Errors
+    /// This will return a `MalformedHTTPResponseException` if:
+    /// * the response does not contain a double carriage return new line (`\r\n\r\n`) to separate the status line and headers from the data.
+    /// While the response may not contain headers or data, this empty line must be present.
+    /// Add `\r\n\r\n` to the end of your response if an error is returned and the response does not contain data.
+    /// * the status line does not match the regex `^HTTP/\d+(\.\d+)? \d+ .+$` (for "HTTP type", "status code", and "status reason" respectively.)
+    /// * the status code is not a number. Should not be encountered due to regex check above but the error is still there.
+    pub fn from_bytes(req_slice: &[u8]) -> Result<HTTPResponse, MalformedHTTPResponseException> {
+        let req = req_slice.to_vec();
+        let raw = req.clone();
+        let mut cont: String = String::new();
+        let mut off: i64 = -1;
+        let mut done: bool = false;
+        while !done {
+            for i in 0..req.len() {
+                let get: &[u8] = req.split_at(i).0;
+                cont = str::from_utf8(get).unwrap().to_string();
+				if cont.ends_with("\r\n\r\n") {
+					off = i as i64;
+					done = true;
+					break;
+				}
+            }
+			if !done {
+                cont = str::from_utf8(&req).unwrap().to_string();
+				if cont.ends_with("\r\n\r\n") {
+					off = req.len() as i64;
+					//done = true;
+					break;
+				}else {
+					return Err(MalformedHTTPResponseException::new("Response does not have \\r\\n\\r\\n before data".to_string()));
+				}
+			}
+        }
+        let status_line: String = cont.splitn(2, "\r\n").collect::<Vec<&str>>()[0].to_string();
+        let modded_type = Regex::new(&format!("^{}{}$", HTTP_TYPE_PATTERN.as_str().split_at(1).1.split_at(HTTP_TYPE_PATTERN.as_str().len() - 2).0, r" \d+ .+")).unwrap();
+        if !modded_type.is_match(&status_line) {
+			return Err(MalformedHTTPResponseException::new(format!("Status line \"{}\" does not match \"{}\"", status_line, modded_type.as_str())));
+        }
+
+        let http_type = status_line.splitn(3, " ").collect::<Vec<&str>>()[0].to_string();
+
+        #[allow(dead_code)]
+        struct FakeNone;
+        impl std::fmt::Debug for FakeNone {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "FakeNone")
+            }
+        }
+        let mut status: Result<(i64, String), FakeNone> = Err(FakeNone);
+        let parsed_status_parse = status_line.splitn(3, " ").collect::<Vec<&str>>()[1].to_string().parse::<i64>();
+        let parsed_status_num = match parsed_status_parse {
+            Ok(n) => n,
+            _e => {return Err(MalformedHTTPResponseException::new(format!("\"{}\" is not a status code", status_line.splitn(3, " ").collect::<Vec<&str>>()[1].to_string())));}
+        };
+        match Status.get(&parsed_status_num) {
+            Some(s) => {status = Ok((parsed_status_num, s.to_string()))},
+            None => {}
+        }
+        if status.is_err() {
+            status = Ok((parsed_status_num, "UNKNOWN".to_string()))
+        }
+
+        let reason = status_line.splitn(3, " ").collect::<Vec<&str>>()[2].to_string();
+
+        let headers = string_to_hash_map(cont.splitn(2, "\r\n").collect::<Vec<&str>>()[1].to_string());
+
+        let mut data: Vec<u8> = Vec::new();
+
+        for i in off as usize..req.len(){
+            data.push(req[i]);
+        }
+
+        return Ok(HTTPResponse {raw: raw, http_type: http_type, status: status.unwrap(), reason: reason, headers: headers, data: data});
+    }
+
+    /// Forms an `HTTPResponse` from data provided.
+    ///
+    /// # Errors
+    /// Should not panic, but calls `HTTPResponse::from_bytes` so an error may be returned if any of the arguments are malformed.
+    /// 
+    /// # Arguments
+    /// `http_type`: The HTTP type, usually `HTTP/1.1`.
+    /// 
+    /// `status`: Status code (e.g.: `200` for "OK", `404` for "Not Found").
+    /// 
+    /// `reason`: Status reason that usually corresponds with the status code, but does not need to
+    /// (`OK` for "200", `Not Found` for "400").
+    /// 
+    /// `headers`: `HashMap` containing headers. The keys and values are both `String`s.
+    /// Use `http_utils::string_to_hash_map(String)` to turn a colon-separated list into a compatible `HashMap`. May be empty.
+    /// 
+    /// `data`: `Vec` of bytes to append to the end of a response. Can be empty.
+    pub fn create_response(http_type: String, status: i64, reason: String, headers: HashMap<String, String>, data: Vec<u8>) -> Result<HTTPResponse, MalformedHTTPResponseException>{
+        let mut ret = format!("{} {} {}\r\n", http_type, status, reason);
+        for (key, val) in headers.clone() {
+            ret = format!("{}{}: {}\r\n", ret, key, val);
+        }
+        ret += "\r\n";
+        let mut vec: Vec<u8> = ret.as_bytes().to_vec();
+        vec.extend(data);
+        HTTPResponse::from_bytes(&vec)
+    }
+
+    ///Converts this `HTTPResponse` into a string.
+    ///# Panics
+    ///Will panic if `data` is not in UTF-8 format. If so, use `to_string_no_data()` instead and handle the `data` field separately.
+    pub fn to_string(&self) -> String{
+        let mut ret = self.to_string_no_data();
+        ret += str::from_utf8(&self.data.clone()).unwrap();
+        ret
+    }
+
+    ///Converts this `HTTPResponse` into a string without the `data` field. Designed for use when `data` is not UTF-8 compatible.
+    ///Resembles an `HTTPResponse` without data (still ends in a double carriage return new line)
+    pub fn to_string_no_data(&self) -> String{
+        let mut ret = format!("{} {} {}\r\n", self.http_type, self.status.0, self.reason);
+        for (key, val) in self.headers.clone() {
+            ret = format!("{}{}: {}\r\n", ret, key, val);
+        }
+        ret += "\r\n";
+        ret
+    }
+
+    ///Converts this `HTTPResponse` into a `Vec<u8>`.
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.to_string().as_bytes().to_vec()
+    }
+
+    ///Converts this `HTTPResponse` into a `Vec<u8>` without converting to a string first.
+    ///This eliminates potential errors with the `data` field not being in UTF-8 format
+    pub fn as_bytes(&self) -> Vec<u8>{
+        let mut ret = self.to_string_no_data().as_bytes().to_vec();
+        ret.extend(&self.data.clone());
+        ret
+    }
+
+}
+
+#[allow(dead_code)]
+///Allows you to convert a `String` into a `HashMap` with keys and values separated by colons (`:`) and sets separated by either a new line or a carriage return then a new line.
+/// This function should not panic.
+/// # Examples
+/// The call:
+/// ```rust
+/// # use http_utils::string_to_hash_map;
+/// string_to_hash_map("Host: 127.0.0.1:8888\nContent-Type: text/html".to_string());
+/// ```
+/// The return:
+/// ```json
+/// HashMap {
+///     Host: "127.0.0.1:8888",
+///     Content-Type: "text/html"
+/// }
+/// ```
+pub fn string_to_hash_map(string: String) -> HashMap<String, String>{
+    let mut ret: HashMap<String, String> = HashMap::new();
+    let split: Vec<&str> = Regex::new("(?:\n)|(?:\r\n)").unwrap().split(&string).collect();
+    for s in split{
+        if s.is_empty() {
+            continue;
+        }
+        let key = s.clone().splitn(2, ":").collect::<Vec<&str>>()[0].to_string();
+        let val = s.clone().splitn(2, ":").collect::<Vec<&str>>()[1].trim().to_string();
+        ret.insert(key, val);
+    }
+    ret
+}
+
+/// Enum returned by `check_if_request_or_response` to return the `HTTPRequest` or `HTTPResponse`.
+pub enum HTTPObject {
+    Request(HTTPRequest),
+    Response(HTTPResponse),
+    Neither
+}
+
+/// Returns an `HTTPObject` containing either a `Request(HTTPRequest)` if the slice passed matches an `HTTPRequest`,
+/// `Response(HTTPResponse)` if the slice passed matches an `HTTPResponse`,
+/// or `Neither` if both checks fail. 
+pub fn check_if_request_or_response(slice: &[u8]) -> HTTPObject{
+    match HTTPRequest::from_bytes(slice) {
+        Ok(req) => {return HTTPObject::Request(req);},
+        Err(_e) => {}
+    }
+    match HTTPResponse::from_bytes(slice) {
+        Ok(res) => {return HTTPObject::Response(res);},
+        Err(_e) => {}
+    }
+    return HTTPObject::Neither;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HTTPRequest, HTTPResponse, string_to_hash_map};
+    #[test]
+    fn request_byte_test() {
+        let bytes = "POST / HTTP/1.1\r\nHost: www.example.com\r\n\r\nthe data".as_bytes();
+        let request = HTTPRequest::from_bytes(bytes).unwrap();
+        assert_eq!(bytes.to_vec(), request.raw);
+        assert_eq!("POST", request.method.to_string());
+        assert_eq!("/", request.path);
+        assert_eq!("HTTP/1.1", request.http_type);
+        assert_eq!("www.example.com", request.headers.get("Host").unwrap());
+        assert_eq!("the data", std::str::from_utf8(&request.data).unwrap());
+        assert_eq!(std::str::from_utf8(bytes).unwrap(), request.to_string());
+    }
+    #[test]
+    fn response_byte_test() {
+        let bytes = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<p>hi<p>".as_bytes();
+        let response = HTTPResponse::from_bytes(bytes).unwrap();
+        assert_eq!(bytes.to_vec(), response.raw);
+        assert_eq!("HTTP/1.1", response.http_type);
+        assert_eq!(200, response.status.0);
+        assert_eq!("OK", response.reason);
+        assert_eq!("text/html; charset=UTF-8", response.headers.get("Content-Type").unwrap());
+        assert_eq!("<p>hi<p>", std::str::from_utf8(&response.data).unwrap());
+        assert_eq!(std::str::from_utf8(bytes).unwrap(), response.to_string());
+    }
+    #[test]
+    fn request_construct_test() {
+        let bytes = "POST / HTTP/1.1\r\nHost: www.example.com\r\n\r\nthe data".as_bytes();
+        let request = HTTPRequest::create_request("POST".to_string(), "/".to_string(), "HTTP/1.1".to_string(), string_to_hash_map("Host: www.example.com".to_string()), b"the data".to_vec()).unwrap();
+        assert_eq!(bytes.to_vec(), request.raw);
+        assert_eq!("POST", request.method.to_string());
+        assert_eq!("/", request.path);
+        assert_eq!("HTTP/1.1", request.http_type);
+        assert_eq!("www.example.com", request.headers.get("Host").unwrap());
+        assert_eq!("the data", std::str::from_utf8(&request.data).unwrap());
+        assert_eq!(std::str::from_utf8(bytes).unwrap(), request.to_string());
+    }
+    #[test]
+    fn response_construct_test() {
+        let bytes = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<p>hi<p>".as_bytes();
+        let response = HTTPResponse::create_response("HTTP/1.1".to_string(), 200, "OK".to_string(), string_to_hash_map("Content-Type: text/html; charset=UTF-8".to_string()), b"<p>hi<p>".to_vec()).unwrap();
+        assert_eq!(bytes.to_vec(), response.raw);
+        assert_eq!("HTTP/1.1", response.http_type);
+        assert_eq!(200, response.status.0);
+        assert_eq!("OK", response.reason);
+        assert_eq!("text/html; charset=UTF-8", response.headers.get("Content-Type").unwrap());
+        assert_eq!("<p>hi<p>", std::str::from_utf8(&response.data).unwrap());
+        assert_eq!(std::str::from_utf8(bytes).unwrap(), response.to_string());
+    }
+    #[test]
+    fn request_fail_test() {
+        let bytes = "SUPERGET thepage HTTP/thebetterone\r\nHost; www.example.com\r\nthe data".as_bytes();
+        let request_result = HTTPRequest::from_bytes(bytes);
+        assert!(request_result.is_err());
+    }
+    #[test]
+    fn response_fail_test() {
+        let bytes = "HTTP/thebetterone -1 ?\r\nContent-Type; text/html; charset=UTF-8\r\n<p>hi<p>".as_bytes();
+        let response_result = HTTPResponse::from_bytes(bytes);
+        assert!(response_result.is_err());
+    }
+}
