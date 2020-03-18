@@ -6,4 +6,7 @@ var replaceText = {
     "research": "file:./research.html",
     "bib": "file:./bib.html",
     "alltext": "file:./another_page.html",
+	
+	
+    "draft": "file:./draft.html",
 }

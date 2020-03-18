@@ -61,3 +61,8 @@ iframe.code{
 	margin-left: 8px;
 	width: 98%;
 }
+pre{
+	overflow-x: auto;
+	white-space: pre-line;
+	word-break: keep-all;
+}
