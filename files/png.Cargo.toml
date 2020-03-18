@@ -1,8 +1,0 @@
-[package]
-name = "png"
-version = "0.1.0"
-authors = ["Caleb Eastman"]
-edition = "2018"
-
-[dependencies]
-flate2 = { version = "1.0", features = ["zlib"], default-features = false }

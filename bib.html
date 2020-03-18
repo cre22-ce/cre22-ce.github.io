@@ -27,17 +27,17 @@
 <p>Requester: <code style="padding-left: 2px; padding-right: 2px;"><a href="https://github.com/ExpHP">ExpHP</a></code></p>
 <p style="display: inline-block; vertical-align: top; margin-top: 0;">Commit message: <pre style="border: solid; border-color: #F8F8F8; background: white; display: inline-block; margin-left: 1em; margin-top: 0; padding-left: 0; padding-top: 1em; padding-right: 1em;">
 Proposes extending <code>{:?}</code> with a general number floating point flag <code>g</code>, similar to <code>{:x?}</code>:
-<pre style="background: #F5F5F5; display: inline-block; margin-left: 1em; padding: 1em; padding-left: 0; border-radius: 5px;">
-assert_eq!(
-	format!("{:g?}", vec![1e2, 1e4, 1e6, 1e8]),
-	"[100.0, 10000.0, 1e6, 1e8]",
-    );</pre></pre></p>
+<pre style="background: #F5F5F5; display: inline-block; margin-left: 1em; padding: 1em; padding-left: 0; border-radius: 5px; text-indent: 0">
+&emsp;&emsp;&emsp;&emsp;assert_eq!(
+&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;format!("{:g?}", vec![1e2, 1e4, 1e6, 1e8]),
+&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;"[100.0, 10000.0, 1e6, 1e8]",
+&emsp;&emsp;&emsp;&emsp;);</pre></pre></p>
 <p>Files changed: <code style="padding-left: 2px; padding-right: 2px;">1</code></p>
 <p>Lines added/removed: <code style="color: green;">+333</code> <code style="color: red;">-0</code></p>
 <p>Comments on commit: <code style="padding-left: 2px; padding-right: 2px;">7</code></p>
 <p>Status: <code style="background: springgreen">Open</code></p>
 </div>
-<p>This is an example of peer reviewed writing in the engineering field as the revision ExpHP suggested has to be reviewed before it is pushed to <code>master</code>. The comments on the commit are talking about the pros and cons of merging this request while also referencing previously pulled requests where a similar suggestion was made</p>
+<p>This is an example of peer reviewed writing in the engineering field as the revision ExpHP suggested has to be reviewed before it is pushed to <code>master</code>. The comments on the commit are talking about the pros and cons of merging this request while also referencing previously pulled requests where a similar suggestion was made.</p>
 </div>
 
 <li style="display: block; padding-left: 1em;"><p style="font-size: 150%; display: inline;">Git Pull Request</p> (<a href="https://github.com/rust-lang/rust/pull/69624">Link</a> to Github page)</li>
