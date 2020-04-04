@@ -1,33 +1,33 @@
 <link rel="stylesheet" href="./style.css">
 <script>
-function hover(event, text="Blank hover.", add={width: "25em"}){
-	x=event.clientX;
-	y=event.layerY;
-	document.getElementById("hoverdiv").innerHTML = text;
-	document.getElementById("hoverdiv").style.display = "block";
-	Object.assign(document.getElementById("hoverdiv").style, add);
-	
-	var plus = 20;
-	if(event.clientY > screen.height/2){
-		plus -= document.getElementById("hoverdiv").offsetHeight + 50;
-	}
-	
-	console.log(event.clientY);
-	console.log(screen.height/2);
-	console.log(event.clientY > screen.height/2);
-	console.log(plus);
-	console.log(y+plus);
-	console.log("---");
-	
-	document.getElementById("hoverdiv").style.left = (x-document.getElementById("hoverdiv").offsetWidth/2)+"px";
-	document.getElementById("hoverdiv").style.top = (y+plus)+"px";
-}
+    function hover(event, text="Blank hover.", add={width: "25em"}){
+        x=event.clientX;
+        y=event.layerY;
+        document.getElementById("hoverdiv").innerHTML = text;
+        document.getElementById("hoverdiv").style.display = "block";
+        Object.assign(document.getElementById("hoverdiv").style, add);
+
+        var plus = 20;
+        if(event.clientY > screen.height/2){
+            plus -= document.getElementById("hoverdiv").offsetHeight + 50;
+        }
+
+        console.log(event.clientY);
+        console.log(screen.height/2);
+        console.log(event.clientY > screen.height/2);
+        console.log(plus);
+        console.log(y+plus);
+        console.log("---");
+
+        document.getElementById("hoverdiv").style.left = (x-document.getElementById("hoverdiv").offsetWidth/2)+"px";
+        document.getElementById("hoverdiv").style.top = (y+plus)+"px";
+    }
 
 function unhover(){
-	document.getElementById("hoverdiv").style.display = "none";
+    document.getElementById("hoverdiv").style.display = "none";
 }
 </script>
-<h1>Artifacts and Reflection:</h1>
+<h1>Artifacts and Research:</h1>
 <p style="font-size: 150%;"><b>1.</b> A Program</p>
 <p>My first artifact is a program that I have written that encodes and decodes Portable Network Graphic (png) files. There are 2 files associated with this: <code>Cargo.toml</code> and <code>lib.rs</code>. Each file is explained below. This is an example of pure code that a Computer Engineer would have to write.<br />
 <br />This code is written in a language called Rust, a memory safe, high performance programming language.
@@ -40,11 +40,11 @@ function unhover(){
 <p>
 This specific file is telling the compiler that:
 <ol>
-	<li>The package name is <code>"png"</code></li>
-	<li>This is version <code>"0.1.0"</code></li>
-	<li>The list of authors are <code>["Caleb Eastman"]</code> (only one author in this list)</li>
-	<li>The edition of this program is <code>"2018"</code></li>
-	<li>This program uses the <code>flate2</code> library</li>
+    <li>The package name is <code>"png"</code></li>
+    <li>This is version <code>"0.1.0"</code></li>
+    <li>The list of authors are <code>["Caleb Eastman"]</code> (only one author in this list)</li>
+    <li>The edition of this program is <code>"2018"</code></li>
+    <li>This program uses the <code>flate2</code> library</li>
 </ol>
 </p>
 <br />
@@ -67,6 +67,7 @@ and the programmer with some critical information. Documentation lines are basic
 <p>Now that all of those documentation lines are in place, we can extract them into a handy local webpage for future reference. This part of the process is made easy by the Rust compiler as it just one command, but methods to extract inline documentation (documentation that is integrated with source code) vary between programming languages</p>
 <p>This is more evident of what a Computer Engineer who specializes in Rust might present as a product to employers and coworkers.</p>
 <p style="font-size: 125%;"><b>1.2</b> <code>Doc files</code>:</p>
-<p>This is an interactive webpane. Follow the links to navigate the documentation.</p>
-<iframe src="./files/doc/http_utils/index.html" class="code" style="height: 35em; display: block; padding-left: 0px;"></iframe>
+<p>This is an interactive webpane. Follow the links to navigate the documentation. The Rust compiler generated the styling for this documentation, but it is populated with the text I provided through the documentation lines.</p>
+<i style="font-size: 75%"><p>Some links lead to the Rust website and will 404 when viewing locally. <a href="javascript:void(0);" onclick="document.getElementById(&quot;doc&quot;).src = &quot;./files/doc/http_utils/index.html&quot;">Click here to reset the documentation.</a></p></i>
+<iframe id="doc" src="./files/doc/http_utils/index.html" class="code" style="height: 35em; display: block; padding-left: 0px;"></iframe>
 <div id="hoverdiv" style="display: none; position: absolute; border-style: ridge; background-color: white; border-radius: 7px; text-align: center;"></div>

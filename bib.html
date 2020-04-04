@@ -1,59 +1,107 @@
 <link rel="stylesheet" href="./style.css"><script src="./replace.js"></script>
 <h1>Bibliography:</h1>
 <ul style="padding-left: 0; margin-left: 0">
-	<p>Terminology:</p>
-	<li style="text-indent: 2em;"><b>git</b>: a distributed version control program that allows multiple collaborators to work on one codebase</li>
-	<li style="text-indent: 2em;"><b>Github.com</b>: a website that utilizes the git protocol to maintain user repositories</li>
-	<li style="text-indent: 2em;"><b>repository/repo</b>: a collection of files that represent an entire codebase</li>
-	<li style="text-indent: 2em;"><b>branch</b>: different versions of the same codebase</li>
-	<li style="text-indent: 2em;"><b><code>master</code> branch</b>: the default and main branch in a repository</li>
-	<li style="text-indent: 2em;"><b>merge</b>: to combine two or more branches into one branch</li>
-	<li style="text-indent: 2em;"><b>push</b>: to merge individual files from one branch to another</li>
-	<li style="text-indent: 2em;"><b>pull request</b>: create, modify, and request a merge of a new branch to the <code>master</code> branch ("pulling" the new branch into <code>master</code>)</li>
-	<li style="text-indent: 2em;"><b>commit</b>: description attatched to a push; sometimes interchangable with push</li>
-	<li style="text-indent: 2em;"><b>clone</b>: to download a repository</li>
-	<li style="text-indent: 2em;"><b>fetch</b>: to download a file from a separate repository</li>
-	<li style="text-indent: 2em;"><b>release</b>: a public distribution of the repository</li>
-	<li style="text-indent: 2em;"><b>stable</b> release: a stable, debugged, immutable distribution of the repository</li>
-	<li style="text-indent: 2em;"><b>nightly</b> release: an experimental, sometimes buggy, mutable distribution of the repository</li>
-	<!--<li style="text-indent: 2em;"><b>fork</b>: to create a new repository out of another/li>-->
-	
+    <p>Terminology:</p>
+    <li style="text-indent: 2em;"><b>git</b>: a distributed version control program that allows multiple collaborators to work on one codebase</li>
+    <li style="text-indent: 2em;"><b>GitHub.com</b>: a website that utilizes the git protocol to maintain user repositories</li>
+    <li style="text-indent: 2em;"><b>repository/repo</b>: a collection of files that represent an entire codebase</li>
+    <li style="text-indent: 2em;"><b>branch</b>: different versions of the same codebase</li>
+    <li style="text-indent: 2em;"><b><code>master</code> branch</b>: the default and main branch in a repository</li>
+    <li style="text-indent: 2em;"><b>issue</b>: a detailed description of a bug report or feature request, or a call for assistance about using some part of the code</li>
+    <li style="text-indent: 2em;"><b>commit</b>: a group of changes requesting to be pushed to <code>master</code> (usually represented by a new branch)</li>
+    <li style="text-indent: 2em;"><b>merge</b>: to combine two or more branches or commits into one branch</li>
+    <li style="text-indent: 2em;"><b>push</b>: to move a local file to a remote location (the repository)</li>
+    <li style="text-indent: 2em;"><b>pull request</b>: to request a merge of one branch to the <code>master</code> branch ("pulling" the branch into <code>master</code>)</li>
+    <li style="text-indent: 2em;"><b>clone</b>: to download a repository</li>
+    <li style="text-indent: 2em;"><b>fetch</b>: to download a file from a separate repository</li>
+    <li style="text-indent: 2em;"><b>release</b>: a public distribution of the repository</li>
+    <li style="text-indent: 2em;"><b>stable</b> release: a stable, debugged, immutable distribution of the repository</li>
+    <li style="text-indent: 2em;"><b>nightly</b> release: an experimental, sometimes buggy, mutable distribution of the repository</li>
+    <!--<li style="text-indent: 2em;"><b>fork</b>: to create a new repository out of another/li>-->
+
 </ul>
 <hr />
-<li style="display: block; padding-left: 1em;"><p style="font-size: 150%; display: inline;">Git Pull Request</p> (<a href="https://github.com/rust-lang/rfcs/pull/2729">Link</a> to Github page)</li>
+<li style="display: block; padding-left: 1em;"><p style="font-size: 150%; display: inline;">Pending Git Pull Request</p> (<a href="https://github.com/rust-lang/rfcs/pull/2729" target="_blank">Link</a> to GitHub page)</li>
 <div style="text-indent: 2em;">
-<div style="display: inline-block; border-left: solid; border-left-width: 0.5em; border-color: springgreen; border-radius: 5px">
-<p>Title: <code>General floating point formatting in Debug with {:g?}</code> (pull request <code>#2729</code>)</p>
-<p>Requester: <code style="padding-left: 2px; padding-right: 2px;"><a href="https://github.com/ExpHP">ExpHP</a></code></p>
-<p style="display: inline-block; vertical-align: top; margin-top: 0;">Commit message: <pre style="border: solid; border-color: #F8F8F8; background: white; display: inline-block; margin-left: 1em; margin-top: 0; padding-left: 0; padding-top: 1em; padding-right: 1em;">
-Proposes extending <code>{:?}</code> with a general number floating point flag <code>g</code>, similar to <code>{:x?}</code>:
-<pre style="background: #F5F5F5; display: inline-block; margin-left: 1em; padding: 1em; padding-left: 0; border-radius: 5px; text-indent: 0">
-&emsp;&emsp;&emsp;&emsp;assert_eq!(
-&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;format!("{:g?}", vec![1e2, 1e4, 1e6, 1e8]),
-&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;"[100.0, 10000.0, 1e6, 1e8]",
-&emsp;&emsp;&emsp;&emsp;);</pre></pre></p>
-<p>Files changed: <code style="padding-left: 2px; padding-right: 2px;">1</code></p>
-<p>Lines added/removed: <code style="color: green;">+333</code> <code style="color: red;">-0</code></p>
-<p>Comments on commit: <code style="padding-left: 2px; padding-right: 2px;">7</code></p>
-<p>Status: <code style="background: springgreen">Open</code></p>
-</div>
-<p>This is an example of peer reviewed writing in the engineering field as the revision ExpHP suggested has to be reviewed before it is pushed to <code>master</code>. The comments on the commit are talking about the pros and cons of merging this request while also referencing previously pulled requests where a similar suggestion was made.</p>
+    <div style="display: inline-block; border-left: solid; border-left-width: 0.5em; border-color: springgreen; border-radius: 5px">
+        <p>Title: <code>General floating point formatting in Debug with {:g?}</code> (pull request <code>#2729</code>)</p>
+        <p>Requester: <code style="padding-left: 2px; padding-right: 2px;"><a href="https://github.com/ExpHP" target="_blank">ExpHP</a></code></p>
+        <p style="display: inline-block; vertical-align: top; margin-top: 0;">Commit message: <pre style="border: solid; border-color: #F8F8F8; background: white; display: inline-block; margin-left: 1em; margin-top: 0; padding-left: 0; padding-top: 1em; padding-right: 1em;">
+                Proposes extending <code>{:?}</code> with a general number floating point flag <code>g</code>, similar to <code>{:x?}</code>:
+                <pre style="background: #F5F5F5; display: inline-block; margin-left: 1em; padding: 1em; padding-left: 0; border-radius: 5px; text-indent: 0">
+                &emsp;&emsp;&emsp;&emsp;assert_eq!(
+                &emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;format!("{:g?}", vec![1e2, 1e4, 1e6, 1e8]),
+                &emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;"[100.0, 10000.0, 1e6, 1e8]",
+                &emsp;&emsp;&emsp;&emsp;);</pre></pre></p>
+                <p>Files changed: <code style="padding-left: 2px; padding-right: 2px;">1</code></p>
+                <p>Lines added/removed: <code style="color: green;">+333</code> <code style="color: red;">-0</code></p>
+                <p>Comments on commit: <code style="padding-left: 2px; padding-right: 2px;">7</code></p>
+                <p>Status: <code style="background: springgreen">Open</code></p>
+    </div>
+    <p>This is an example of peer reviewed writing in the engineering field as the revision ExpHP suggested has to be reviewed before it is pushed to <code>master</code>. The comments on the commit are talking about the pros and cons of merging this request while also referencing previously pulled requests where a similar suggestion was made.
+    <br />&emsp;&emsp;This is useful for me as GitHub might be an integral part to my workflow in the future in the Computer Engineering field. This shows how a commit would be constructed and how conversation would occur when requesting pull requests.
+    </p>
 </div>
 
-<li style="display: block; padding-left: 1em;"><p style="font-size: 150%; display: inline;">Git Pull Request</p> (<a href="https://github.com/rust-lang/rust/pull/69624">Link</a> to Github page)</li>
+<li style="display: block; padding-left: 1em;"><p style="font-size: 150%; display: inline;">Successful Git Pull Request</p> (<a href="https://github.com/rust-lang/rust/pull/69624" target="_blank">Link</a> to GitHub page)</li>
 <div style="text-indent: 2em;">
-<div style="display: inline-block; border-left: solid; border-left-width: 0.5em; border-color: purple; border-radius: 5px">
-<p>Title: <code>Toolstate: Don't block beta week on already broken tools.</code> (pull request <code>#69624</code>)</p>
-<p>Requester: <code style="padding-left: 2px; padding-right: 2px;"><a href="https://github.com/ehuss">ehuss</a></code></p>
-<p style="display: inline-block; vertical-align: top; margin-top: 0;">Commit message: <pre style="border: solid; border-color: #F8F8F8; background: white; display: inline-block; margin-left: 1em; margin-top: 0; padding-left: 0; padding-top: 1em; padding-right: 1em;">
-<p style="text-indent: 0; margin: 0; margin-left: 2em;">This changes it so that tools are allowed to be broken entering the beta week if they are already broken.<br />This restores the original behavior before the changes in <a href="https://github.com/rust-lang/rust/pull/66681">#66681</a>.
+    <div style="display: inline-block; border-left: solid; border-left-width: 0.5em; border-color: purple; border-radius: 5px">
+        <p>Title: <code>Toolstate: Don't block beta week on already broken tools.</code> (pull request <code>#69624</code>)</p>
+        <p>Requester: <code style="padding-left: 2px; padding-right: 2px;"><a href="https://github.com/ehuss" target="_blank">ehuss</a></code></p>
+        <p style="display: inline-block; vertical-align: top; margin-top: 0;">Commit message: <pre style="border: solid; border-color: #F8F8F8; background: white; display: inline-block; margin-left: 1em; margin-top: 0; padding-left: 0; padding-top: 1em; padding-right: 1em;">
+                <p style="text-indent: 0; margin: 0; margin-left: 2em;">This changes it so that tools are allowed to be broken entering the beta week if they are already broken.<br />This restores the original behavior before the changes in <a href="https://github.com/rust-lang/rust/pull/66681" target="_blank">#66681</a>.
 
-Closes <a href="https://github.com/rust-lang/rust/issues/68458">#68458</a></p>
-</pre></p>
-<p>Files changed: <code style="padding-left: 2px; padding-right: 2px;">1</code></p>
-<p>Lines added/removed: <code style="color: green;">+133</code> <code style="color: red;">-63</code></p>
-<p>Comments on commit: <code style="padding-left: 2px; padding-right: 2px;">9</code></p>
-<p>Status: <code style="background: purple; color: white">Merged</code></p>
+                Closes <a href="https://github.com/rust-lang/rust/issues/68458" target="_blank">#68458</a></p>
+        </pre></p>
+        <p>Files changed: <code style="padding-left: 2px; padding-right: 2px;">1</code></p>
+        <p>Lines added/removed: <code style="color: green;">+133</code> <code style="color: red;">-63</code></p>
+        <p>Comments on commit: <code style="padding-left: 2px; padding-right: 2px;">9</code></p>
+        <p>Status: <code style="background: purple; color: white">Merged</code></p>
+    </div>
+    <p>This is an example of peer reviewing others' work as this pull request actually reverts changes made previously in the <code>master</code> branch and closes a pending branch. In many fields, peer reviewing can sometimes lead to heavy revision of or removal of someone else's work and this is no exception. In Computer Engineering, this can take the form of reverting someone else's merged pull request back to its previous state from over a month prior.
+    <br />&emsp;&emsp;This is useful for me by showing how to take someone else's suggestion and properly implement it into the repository. It also shows that sometimes pull requests move between releases. 
+    </p>
 </div>
-<p>This is an example of peer reviewing others' work as this pull request actually reverts changes made previously in the <code>master</code> branch and closes a pending branch.</p>
+
+<li style="display: block; padding-left: 1em;"><p style="font-size: 150%; display: inline;">Semi-Successful Git Pull Request</p> (<a href="https://github.com/rust-lang/rust/pull/69623" target="_blank">Link</a> to GitHub page)</li>
+<div style="text-indent: 2em;">
+    <div style="display: inline-block; border-left: solid; border-left-width: 0.5em; border-color: purple; border-radius: 5px">
+        <p>Title: <code>stash API: remove panic to fix ICE.</code> (pull request <code>#69623</code>)</p>
+        <p>Requester: <code style="padding-left: 2px; padding-right: 2px;"><a href="https://github.com/Centril" target="_blank">Centril</a></code></p>
+        <p style="display: inline-block; vertical-align: top; margin-top: 0;">Commit message: <pre style="border: solid; border-color: #F8F8F8; background: white; display: inline-block; margin-left: 1em; margin-top: 0; padding-left: 0; padding-top: 1em; padding-right: 1em;">
+                <p style="text-indent: 0; margin: 0; margin-left: 2em;">Implements the temporary solution suggested in <a href="https://github.com/rust-lang/rust/pull/69537#issuecomment-593143975" target="_blank">#69537 (comment)</a>.
+
+                Fixes <a href="https://github.com/rust-lang/rust/issues/69396" target="_blank">#69396</a>.
+
+                r? @petrochenkov
+                </p>
+        </pre></p>
+        <p>Files changed: <code style="padding-left: 2px; padding-right: 2px;">3</code></p>
+        <p>Lines added/removed: <code style="color: green;">+74</code> <code style="color: red;">-74</code></p>
+        <p>Comments on commit: <code style="padding-left: 2px; padding-right: 2px;">3</code></p>
+        <p>Status: <code style="background: purple; color: white">Merged</code></p>
+    </div>
+    <p>This is an example of someone else implementing a feature request/bug fix. The requester Centril actually wrote the code to a feature request from a comment in issue #69537. The "r? @petrochenkov" part of the comment is shorthand for asking the user petrochenkov (an administrator of this repository) to review this pull request. This is labeled semi-successful because after being reviewed by the project admins, this pull request was deemed not suitable for the stable release and was moved to the beta (nightly) release. It still managed to get merged, just not as originally requested.
+    <br />&emsp;&emsp;This is useful for me to show the whole process of how commits are instated and reviewed before they are successfully merged. It also shows how repo tags are used to organize the project.
+    </p>
+</div>
+
+<li style="display: block; padding-left: 1em;"><p style="font-size: 150%; display: inline;">Research Paper on Writing in Computer Engineering</p> (<a href="./files/Yakhno Ekin Paper.pdf" target="_blank">Link</a> to paper)</li>
+&emsp;<i style="font-size: 75%">From <u>Student Conference as a Student Centred Environment for Integrating Technical Writings into Computer Engineering Curriculum</u>, by Yakhno, Ekin.</i>
+<div style="text-indent: 2em;">
+    <p>This paper serves as two examples of writing in Computer Engineering. Not only is the content about writing in Computer Engineering, but it itself is writing in the Computer Engineering field.
+    This paper by Turkish denizens Professor Yakhno and Assistant Professor Ekin focuses on the reformation of Computer Engineering teaching practices in Turkey, specifically in İzmir University in Karabağlar, İzmir, Turkey.
+    <!--dotted I: &304; g: &287;-->
+    For new Computer Engineering students at İzmir University, technical English and technical writing are given as introductory courses to improve communication skills and increase self confidence, but it can be potentially ineffective to fresh Engineering students.
+    Professor Yakhno and Assistant Professor Ekin show how having a student organized conference with team centered projects can actually do a better job at teaching students better communication skills than the traditional classes by taking a "Project-Based Learning approach."
+    <br/>&emsp;&emsp;This paper is useful to me for the second example of writing: it shows how a proper peer-reviewed journal might look and function. This paper uses various graphics, data, and lists to get its point across to the reader. While I most likely would not be writing about this topic, the formatting is potentially a good template to compare a journal to.
+    </p>
+</div>
+
+<li style="display: block; padding-left: 1em;"><p style="font-size: 150%; display: inline;">Paper on Teaching Technical Writing in Computer Engineering</p> (<a href="./files/Roy Paper.pdf" target="_blank">Link</a> to paper)</li>
+&emsp;<i style="font-size: 75%">From <u>Concept Maps for Teaching Technical Writing to Computer Science Majors: A Case Study in a Japanese Technical Institute</u>, by Roy.</i>
+<div style="text-indent: 2em;">
+    <p>This paper is an example technical writing in the Computer Engineering field. It is a guide to instructors on a particular method of teaching technical writing to college students in Computer Engineering. The paper suggests using graphics, tables, and concept maps to assist the learning experience. The author, Professor Roy from University of Aizu in Fukushima, Japan, uses a survey-based study of 25 students to prove the effectiveness of the methods described.
+    <br />&emsp;&emsp;This is useful as another example of a peer-reviewed journal and a potential learning method. I can implement these techniques into my normal learning method to potentially increase retention.
+    </p>
 </div>
